@@ -51,11 +51,12 @@ func loadConfig(dir string) (Config, bool, error) {
 	return c, true, nil
 }
 
-// Repo is one entry in the global registry /etc/deployeur/repos.yml.
+// Repo is one entry in the global registry /etc/deployeur/repos.yml. It only
+// maps a name to its directory + secret; the branch (and steps) live in the
+// repo's .deployeur.yml, the single source of truth.
 type Repo struct {
 	Name   string `yaml:"name"`
 	Dir    string `yaml:"dir"`
-	Branch string `yaml:"branch"`
 	Secret string `yaml:"secret"`
 }
 

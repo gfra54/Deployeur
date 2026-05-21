@@ -21,7 +21,7 @@ func status() error {
 	for _, r := range reg.Repos {
 		st := readState(r.Name)
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			r.Name, r.Branch, orDash(short(st.Commit)), when(st.Timestamp), statut(st), orDash(st.Duration))
+			r.Name, targetBranch(r.Dir), orDash(short(st.Commit)), when(st.Timestamp), statut(st), orDash(st.Duration))
 	}
 	return tw.Flush()
 }

@@ -182,6 +182,15 @@ func gitOut(dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// targetBranch is the branch deployeur acts on for a repo: the .deployeur.yml
+// branch, falling back to the checked-out branch.
+func targetBranch(dir string) string {
+	if cfg, _, err := loadConfig(dir); err == nil && cfg.Branch != "" {
+		return cfg.Branch
+	}
+	return gitDefaultBranch(dir)
+}
+
 // gitDefaultBranch resolves the current branch, falling back to "master".
 func gitDefaultBranch(dir string) string {
 	if b := gitOut(dir, "rev-parse", "--abbrev-ref", "HEAD"); b != "" && b != "HEAD" {

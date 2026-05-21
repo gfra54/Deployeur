@@ -90,11 +90,12 @@ func (d *daemon) handleHook(w http.ResponseWriter, r *http.Request) {
 	}
 	json.Unmarshal(body, &p)
 	branch := strings.TrimPrefix(p.Ref, "refs/heads/")
+	want := targetBranch(repo.Dir)
 	switch {
 	case branch == "":
 		io.WriteString(w, "ok (pas de ref, ignoré)\n") // ex. ping GitHub
-	case branch != repo.Branch:
-		log.Printf("hook %s: branche %q ignorée (attendu %q)", name, branch, repo.Branch)
+	case branch != want:
+		log.Printf("hook %s: branche %q ignorée (attendu %q)", name, branch, want)
 		fmt.Fprintf(w, "branche %q ignorée\n", branch)
 	default:
 		d.trigger(repo)

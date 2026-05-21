@@ -56,7 +56,7 @@ func initRepo(yes bool) error {
 		return err
 	}
 
-	secret, err := register(name, dir, cfg.Branch)
+	secret, err := register(name, dir)
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func initRepo(yes bool) error {
 
 // register adds or updates the repo in the registry, returning its HMAC secret
 // (preserved across re-init so the Git host config stays valid).
-func register(name, dir, branch string) (string, error) {
+func register(name, dir string) (string, error) {
 	reg, err := loadRegistry()
 	if err != nil {
 		return "", err
@@ -88,7 +88,6 @@ func register(name, dir, branch string) (string, error) {
 	for i := range reg.Repos {
 		if reg.Repos[i].Name == name {
 			reg.Repos[i].Dir = dir
-			reg.Repos[i].Branch = branch
 			if reg.Repos[i].Secret == "" {
 				reg.Repos[i].Secret = genSecret()
 			}
@@ -96,7 +95,7 @@ func register(name, dir, branch string) (string, error) {
 		}
 	}
 	secret := genSecret()
-	reg.Repos = append(reg.Repos, Repo{Name: name, Dir: dir, Branch: branch, Secret: secret})
+	reg.Repos = append(reg.Repos, Repo{Name: name, Dir: dir, Secret: secret})
 	if err := saveRegistry(reg); err != nil {
 		return "", fmt.Errorf("écriture %s (droits insuffisants ? lance avec sudo ou en tant qu'user deployeur): %w", reposPath(), err)
 	}
