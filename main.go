@@ -97,9 +97,9 @@ commandes:
   deploy [dir]   déploie le repo (dossier courant par défaut)
   init [-y]      scanne le repo, génère .deployeur.yml, enregistre le webhook
   webhook        lance le daemon (TLS sur le port dédié + admin local 127.0.0.1:9000)
-  setup [-n]        prépare le serveur (user, dossiers, service systemd, sudoers) — root requis, -n=dry-run
-  status            tableau d'état de tous les repos enregistrés
-  logs <repo>       suit le log d'un repo (tail -f), --last [N] pour les N dernières lignes
+  setup [-n]     prépare le serveur (user, dossiers, systemd, sudoers) — root requis, -n=dry-run
+  status         tableau d'état de tous les repos enregistrés
+  logs <repo>    suit le log d'un repo (tail -f), --last [N] pour les N dernières lignes
   version        affiche la version
 `)
 }
