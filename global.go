@@ -18,6 +18,7 @@ import (
 type Global struct {
 	Hostname string `yaml:"hostname"`
 	Port     int    `yaml:"port"`
+	User     string `yaml:"user"` // user système qui exécute le daemon + les deploys
 	TLSCert  string `yaml:"tls_cert"`
 	TLSKey   string `yaml:"tls_key"`
 }

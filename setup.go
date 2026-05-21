@@ -7,8 +7,6 @@ import (
 	"os/user"
 )
 
-const deployUser = "deployeur"
-
 const unitTemplate = `[Unit]
 Description=deployeur webhook daemon
 After=network.target
@@ -25,49 +23,57 @@ WantedBy=multi-user.target
 `
 
 const sudoersTemplate = `# Généré par deployeur setup — complète selon tes besoins, puis valide avec visudo.
-# Autorise l'user deployeur à recharger des services sans mot de passe.
+# Autorise l'user %[1]s à recharger des services sans mot de passe.
 # Décommente/adapte les lignes utiles :
-# deployeur ALL=(root) NOPASSWD: /usr/bin/systemctl reload apache2
-# deployeur ALL=(root) NOPASSWD: /usr/bin/systemctl reload php8.2-fpm
+# %[1]s ALL=(root) NOPASSWD: /usr/bin/systemctl reload apache2
+# %[1]s ALL=(root) NOPASSWD: /usr/bin/systemctl reload php8.2-fpm
 `
 
-// setup prepares the server: user, dirs, systemd service, sudoers template,
-// per-server config. With dryRun it only prints the actions.
-func setup(dryRun bool) error {
+// setup prepares the server to run under an existing user: dirs, systemd
+// service, sudoers template, per-server config. With dryRun it only prints.
+func setup(runUser string, dryRun bool) error {
 	if !dryRun && os.Geteuid() != 0 {
 		return fmt.Errorf("setup doit tourner en root (sudo deployeur setup), ou utilise --dry-run")
+	}
+	if runUser == "" {
+		runUser = os.Getenv("SUDO_USER")
+	}
+	if runUser == "" {
+		return fmt.Errorf("impossible de déterminer l'utilisateur cible — précise-le avec --user <nom>")
+	}
+	u, err := user.Lookup(runUser)
+	if err != nil {
+		return fmt.Errorf("utilisateur %q introuvable (setup ne crée pas le user, choisis-en un existant): %w", runUser, err)
 	}
 	self, err := os.Executable()
 	if err != nil {
 		return err
 	}
+	owner := runUser + ":" + runUser
 
 	steps := []struct {
 		desc string
 		fn   func() error
 	}{
-		{fmt.Sprintf("créer l'utilisateur système %q (avec home pour ssh/git)", deployUser), func() error {
-			if _, err := user.Lookup(deployUser); err == nil {
-				fmt.Println("  déjà présent, ignoré")
-				return nil
+		{fmt.Sprintf("créer %s (chown %s)", etcDir, runUser), func() error {
+			if err := os.MkdirAll(etcDir, 0o755); err != nil {
+				return err
 			}
-			return sh("useradd", "--system", "--create-home", "--shell", "/bin/bash", deployUser)
+			return sh("chown", "-R", owner, etcDir)
 		}},
-		{"créer " + etcDir + " (0755)", func() error {
-			return os.MkdirAll(etcDir, 0o755)
-		}},
-		{"créer " + logDir + " (0750, chown " + deployUser + ")", func() error {
+		{fmt.Sprintf("créer %s (0750, chown %s)", logDir, runUser), func() error {
 			if err := os.MkdirAll(logDir, 0o750); err != nil {
 				return err
 			}
-			return sh("chown", deployUser+":"+deployUser, logDir)
+			return sh("chown", "-R", owner, logDir)
 		}},
 		{"installer /etc/systemd/system/deployeur-webhook.service", func() error {
-			unit := fmt.Sprintf(unitTemplate, deployUser, self)
+			unit := fmt.Sprintf(unitTemplate, runUser, self)
 			return os.WriteFile("/etc/systemd/system/deployeur-webhook.service", []byte(unit), 0o644)
 		}},
 		{"générer /etc/sudoers.d/deployeur (modèle à compléter)", func() error {
-			if err := os.WriteFile("/etc/sudoers.d/deployeur", []byte(sudoersTemplate), 0o440); err != nil {
+			content := fmt.Sprintf(sudoersTemplate, runUser)
+			if err := os.WriteFile("/etc/sudoers.d/deployeur", []byte(content), 0o440); err != nil {
 				return err
 			}
 			return sh("visudo", "-cf", "/etc/sudoers.d/deployeur")
@@ -91,18 +97,32 @@ func setup(dryRun bool) error {
 		}
 	}
 
-	g, err := ensureGlobal(true)
+	g, _, err := loadGlobal()
 	if err != nil && !dryRun {
 		return err
 	}
-	printPostSetup(g)
+	if g.Hostname == "" {
+		g.Hostname = defaultHostname()
+	}
+	if g.Port == 0 {
+		if g.Port, err = pickPort(); err != nil {
+			return err
+		}
+	}
+	g.User = runUser
+	if !dryRun {
+		if err := saveGlobal(g); err != nil {
+			return err
+		}
+	}
+	printPostSetup(g, u.HomeDir)
 	return nil
 }
 
-func printPostSetup(g Global) {
+func printPostSetup(g Global, home string) {
 	url := fmt.Sprintf("https://%s:%d/hooks/<repo>", g.Hostname, g.Port)
 	fmt.Printf(`
-Serveur prêt. À finaliser de ton côté :
+Serveur prêt — daemon sous l'user %q. À finaliser de ton côté :
 
 1. Pare-feu : ouvrir le port %d en entrée
      ufw allow %d/tcp
@@ -112,12 +132,14 @@ Serveur prêt. À finaliser de ton côté :
    - soit Let's Encrypt → %s
      (le daemon détecte ensuite /etc/letsencrypt/live/%s/ automatiquement)
 
-3. Accès git : l'user %q doit pouvoir faire `+"`git fetch`"+` dans chaque repo
-   (deploy key ssh dans /home/%s/.ssh, ou token https dans le remote) et avoir
-   les droits d'écriture sur les dossiers déployés.
+3. Accès : l'user %q doit pouvoir faire `+"`git fetch`"+` dans chaque repo
+   (deploy key ssh dans %s/.ssh, ou token https dans le remote), avoir les
+   droits d'écriture sur les dossiers déployés, et — si tu utilises PM2 — être
+   le propriétaire des process PM2 (pm2 est par utilisateur).
 
-Ensuite, dans chaque app : `+"`deployeur init`"+` → webhook %s
-`, g.Port, g.Port, g.Hostname, globalPath(), certbotHint(g.Hostname), g.Hostname, deployUser, deployUser, url)
+L'user possède %s, donc `+"`deployeur init`"+` tourne sans sudo dans chaque app.
+Webhook annoncé : %s
+`, g.User, g.Port, g.Port, g.Hostname, globalPath(), certbotHint(g.Hostname), g.Hostname, g.User, home, etcDir, url)
 }
 
 // certbotHint returns the right next step depending on certbot's presence.

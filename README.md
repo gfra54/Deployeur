@@ -16,7 +16,7 @@ GOOS=linux GOARCH=amd64 go build -o deployeur .
 - [x] `deploy` — fetch + ff-only (non destructif) + before/steps/after/on_failure, variables d'env
 - [x] `init` — scan, génération `.deployeur.yml`, enregistrement webhook
 - [x] `webhook` — daemon HMAC + coalescing, TLS direct sur port dédié (pas de reverse proxy)
-- [x] `setup` — user, dossiers, service systemd, sudoers, port + TLS (cert existant ou certbot)
+- [x] `setup` — dossiers, service systemd, sudoers sous un user **existant** (--user / $SUDO_USER), port + TLS (cert existant ou certbot)
 - [x] `status`, `logs`
 
 ## Architecture webhook

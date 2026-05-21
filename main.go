@@ -33,7 +33,7 @@ func main() {
 	case "logs":
 		err = logs(firstArg(args), lastN(args))
 	case "setup":
-		err = setup(hasFlag(args, "--dry-run", "-n"))
+		err = setup(flagVal(args, "--user"), hasFlag(args, "--dry-run", "-n"))
 	case "version", "-v", "--version":
 		fmt.Println("deployeur " + version)
 	case "help", "-h", "--help":
@@ -59,6 +59,16 @@ func hasFlag(args []string, names ...string) bool {
 		}
 	}
 	return false
+}
+
+// flagVal returns the value following a `--flag value` argument, or "".
+func flagVal(args []string, name string) string {
+	for i, a := range args {
+		if a == name && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
 }
 
 // firstArg returns the first positional (non-flag) argument.
@@ -97,7 +107,8 @@ commandes:
   deploy [dir]   déploie le repo (dossier courant par défaut)
   init [-y]      scanne le repo, génère .deployeur.yml, enregistre le webhook
   webhook        lance le daemon (TLS sur le port dédié + admin local 127.0.0.1:9000)
-  setup [-n]     prépare le serveur (user, dossiers, systemd, sudoers) — root requis, -n=dry-run
+  setup [-n]     prépare le serveur (dossiers, systemd, sudoers) sous un user existant
+                 (--user <nom>, défaut $SUDO_USER) — root requis, -n=dry-run
   status         tableau d'état de tous les repos enregistrés
   logs <repo>    suit le log d'un repo (tail -f), --last [N] pour les N dernières lignes
   version        affiche la version
