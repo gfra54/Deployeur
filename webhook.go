@@ -46,11 +46,11 @@ func runWebhook() error {
 	}()
 
 	addr := fmt.Sprintf(":%d", g.Port)
-	if g.TLSCert != "" && g.TLSKey != "" {
+	if cert, key, ok := resolveTLS(g); ok {
 		log.Printf("webhook TLS sur https://%s:%d/hooks/", g.Hostname, g.Port)
-		return http.ListenAndServeTLS(addr, g.TLSCert, g.TLSKey, public)
+		return http.ListenAndServeTLS(addr, cert, key, public)
 	}
-	log.Printf("webhook HTTP (sans TLS) sur %s — renseigne tls_cert/tls_key dans %s", addr, globalPath())
+	log.Printf("webhook HTTP (sans TLS) sur %s — renseigne tls_cert/tls_key dans %s ou lance certbot pour %s", addr, globalPath(), g.Hostname)
 	return http.ListenAndServe(addr, public)
 }
 
@@ -146,6 +146,20 @@ func handleStatus(w http.ResponseWriter, _ *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(out)
+}
+
+// resolveTLS returns the cert/key to use: explicit config paths first, then a
+// Let's Encrypt cert for the hostname if one exists (certbot integration).
+func resolveTLS(g Global) (cert, key string, ok bool) {
+	if g.TLSCert != "" && g.TLSKey != "" {
+		return g.TLSCert, g.TLSKey, true
+	}
+	le := "/etc/letsencrypt/live/" + g.Hostname
+	cert, key = le+"/fullchain.pem", le+"/privkey.pem"
+	if exists(cert) && exists(key) {
+		return cert, key, true
+	}
+	return "", "", false
 }
 
 func findRepo(reg Registry, name string) (Repo, bool) {

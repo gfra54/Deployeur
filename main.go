@@ -33,7 +33,7 @@ func main() {
 	case "logs":
 		err = logs(firstArg(args), lastN(args))
 	case "setup":
-		err = fmt.Errorf("%q: pas encore implémenté", os.Args[1])
+		err = setup(hasFlag(args, "--dry-run", "-n"))
 	case "version", "-v", "--version":
 		fmt.Println("deployeur " + version)
 	case "help", "-h", "--help":
@@ -97,7 +97,7 @@ commandes:
   deploy [dir]   déploie le repo (dossier courant par défaut)
   init [-y]      scanne le repo, génère .deployeur.yml, enregistre le webhook
   webhook        lance le daemon (TLS sur le port dédié + admin local 127.0.0.1:9000)
-  setup          prépare le serveur (user, dossiers, service systemd)
+  setup [-n]        prépare le serveur (user, dossiers, service systemd, sudoers) — root requis, -n=dry-run
   status            tableau d'état de tous les repos enregistrés
   logs <repo>       suit le log d'un repo (tail -f), --last [N] pour les N dernières lignes
   version        affiche la version

@@ -14,10 +14,18 @@ GOOS=linux GOARCH=amd64 go build -o deployeur .
 ## État
 
 - [x] `deploy` — fetch + ff-only (non destructif) + before/steps/after/on_failure, variables d'env
-- [ ] `init` — scan, génération `.deployeur.yml`, enregistrement webhook
-- [ ] `webhook` — daemon HMAC, TLS direct sur port dédié (pas de reverse proxy)
-- [ ] `setup` — user, dossiers, service systemd, sudoers, port + TLS (cert existant ou certbot)
-- [ ] `status`, `logs`
+- [x] `init` — scan, génération `.deployeur.yml`, enregistrement webhook
+- [x] `webhook` — daemon HMAC + coalescing, TLS direct sur port dédié (pas de reverse proxy)
+- [x] `setup` — user, dossiers, service systemd, sudoers, port + TLS (cert existant ou certbot)
+- [x] `status`, `logs`
+
+## Architecture webhook
+
+Le daemon écoute en TLS directement sur un port dédié (aléatoire, persisté dans
+`/etc/deployeur/config.yml`), **sans reverse proxy**. URL annoncée par `init` :
+`https://<hostname>:<port>/hooks/<repo>`. TLS : cert renseigné en config, sinon
+cert Let's Encrypt du hostname détecté automatiquement. `/status` et `/healthz`
+restent sur `127.0.0.1:9000` (local only).
 
 ## .deployeur.yml
 
