@@ -8,12 +8,13 @@ Un seul binaire, aucune dépendance runtime sur les serveurs.
 ```bash
 wget -qO /usr/local/bin/deployeur https://.../deployeur \
   && chmod +x /usr/local/bin/deployeur \
-  && sudo deployeur setup --user $USER
+  && sudo deployeur setup
 ```
 
-`setup` crée les dossiers (possédés par l'user choisi), le service systemd, le
-sudoers, ouvre le port et câble le TLS, puis démarre le daemon. Ensuite, dans
-chaque app : `deployeur init` (sans sudo).
+`setup` détecte l'user via `$SUDO_USER` (override possible avec `--user`), crée
+les dossiers (possédés par cet user), le service systemd, le sudoers, ouvre le
+port, génère le cert TLS (certbot) et démarre le daemon. Ensuite, dans chaque
+app : `deployeur init` (sans sudo).
 
 ## Build
 

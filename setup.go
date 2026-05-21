@@ -181,10 +181,10 @@ func setupTLS(g *Global) error {
 	}
 
 	if !exists(live + "/fullchain.pem") {
-		fmt.Printf("  pas de cert pour %s — obtiens-en un puis relance setup:\n", g.Hostname)
-		fmt.Printf("      %s\n", certbotHint(g.Hostname))
-		fmt.Println("  (le daemon démarrera en HTTP en attendant)")
-		return nil
+		if err := obtainCert(g.Hostname); err != nil {
+			fmt.Printf("  certbot a échoué (%v) — le daemon démarrera en HTTP ; corrige puis relance setup\n", err)
+			return nil
+		}
 	}
 	if err := os.MkdirAll(dst, 0o750); err != nil {
 		return err
@@ -219,13 +219,28 @@ Webhook : %s
 `, g.User, g.User, home, g.Port, g.User, etcDir, url)
 }
 
-// certbotHint returns the recommended issuance command for the hostname.
-func certbotHint(hostname string) string {
-	base := "certbot certonly --apache -d " + hostname
-	if _, err := exec.LookPath("certbot"); err != nil {
-		return "installe certbot puis: " + base
+// obtainCert issues a Let's Encrypt cert for the hostname via certbot's Apache
+// authenticator (non-interactive, relies on an already-registered account).
+func obtainCert(hostname string) error {
+	certbot := certbotPath()
+	if certbot == "" {
+		return fmt.Errorf("certbot introuvable — installe-le")
 	}
-	return base
+	fmt.Printf("  obtention d'un cert Let's Encrypt pour %s (certbot --apache)…\n", hostname)
+	return sh(certbot, "certonly", "--apache", "-d", hostname,
+		"-n", "--agree-tos", "--keep-until-expiring")
+}
+
+func certbotPath() string {
+	if p, err := exec.LookPath("certbot"); err == nil {
+		return p
+	}
+	for _, p := range []string{"/snap/bin/certbot", "/usr/bin/certbot"} {
+		if exists(p) {
+			return p
+		}
+	}
+	return ""
 }
 
 func sh(name string, args ...string) error {
