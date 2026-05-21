@@ -40,6 +40,12 @@ func deploy(dir string) error {
 	}
 
 	repo := filepath.Base(dir)
+	lock, err := lockRepo(repo)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+
 	logw, closeLog := openLog(repo)
 	defer closeLog()
 
@@ -153,6 +159,16 @@ type state struct {
 func saveState(st state) {
 	data, _ := json.MarshalIndent(st, "", "  ")
 	os.WriteFile(filepath.Join(logDir, st.Repo+".state.json"), data, 0o640)
+}
+
+// readState loads a repo's last deploy state ({} if none yet).
+func readState(repo string) state {
+	var st state
+	data, err := os.ReadFile(filepath.Join(logDir, repo+".state.json"))
+	if err == nil {
+		json.Unmarshal(data, &st)
+	}
+	return st
 }
 
 // gitOut runs a git command in dir and returns trimmed stdout ("" on error).
