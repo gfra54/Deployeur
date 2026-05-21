@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 )
 
 var version = "dev"
@@ -26,7 +28,11 @@ func main() {
 		err = initRepo(hasFlag(args, "-y", "--yes"))
 	case "webhook":
 		err = runWebhook()
-	case "setup", "status", "logs":
+	case "status":
+		err = status()
+	case "logs":
+		err = logs(firstArg(args), lastN(args))
+	case "setup":
 		err = fmt.Errorf("%q: pas encore implémenté", os.Args[1])
 	case "version", "-v", "--version":
 		fmt.Println("deployeur " + version)
@@ -55,6 +61,33 @@ func hasFlag(args []string, names ...string) bool {
 	return false
 }
 
+// firstArg returns the first positional (non-flag) argument.
+func firstArg(args []string) string {
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			return a
+		}
+	}
+	return ""
+}
+
+// lastN parses `--last [N]`: 0 means follow (no --last), N>0 prints N lines
+// (default 200 if --last is given without a number).
+func lastN(args []string) int {
+	for i, a := range args {
+		if a != "--last" {
+			continue
+		}
+		if i+1 < len(args) {
+			if n, err := strconv.Atoi(args[i+1]); err == nil {
+				return n
+			}
+		}
+		return 200
+	}
+	return 0
+}
+
 func usage() {
 	fmt.Print(`deployeur — déploiement auto-hébergé
 
@@ -65,8 +98,8 @@ commandes:
   init [-y]      scanne le repo, génère .deployeur.yml, enregistre le webhook
   webhook        lance le daemon (TLS sur le port dédié + admin local 127.0.0.1:9000)
   setup          prépare le serveur (user, dossiers, service systemd)
-  status         état de tous les repos enregistrés
-  logs <repo>    affiche les logs d'un repo
+  status            tableau d'état de tous les repos enregistrés
+  logs <repo>       suit le log d'un repo (tail -f), --last [N] pour les N dernières lignes
   version        affiche la version
 `)
 }
