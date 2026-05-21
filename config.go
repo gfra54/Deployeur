@@ -7,20 +7,31 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	configFile = ".deployeur.yml"
-	logDir     = "/var/log/deployeur"
-	etcDir     = "/etc/deployeur"
-	reposFile  = "/etc/deployeur/repos.yml"
+const configFile = ".deployeur.yml"
+
+// Base directories, overridable via env for tests (unset in production).
+var (
+	etcDir = envOr("DEPLOYEUR_ETC", "/etc/deployeur")
+	logDir = envOr("DEPLOYEUR_LOG", "/var/log/deployeur")
 )
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func reposPath() string  { return filepath.Join(etcDir, "repos.yml") }
+func globalPath() string { return filepath.Join(etcDir, "config.yml") }
 
 // Config is the per-repo .deployeur.yml.
 type Config struct {
 	Branch    string   `yaml:"branch"`
-	Before    []string `yaml:"before"`
-	Steps     []string `yaml:"steps"`
-	After     []string `yaml:"after"`
-	OnFailure []string `yaml:"on_failure"`
+	Before    []string `yaml:"before,omitempty"`
+	Steps     []string `yaml:"steps,omitempty"`
+	After     []string `yaml:"after,omitempty"`
+	OnFailure []string `yaml:"on_failure,omitempty"`
 }
 
 // loadConfig reads .deployeur.yml from dir. If absent, it falls back to the
@@ -54,7 +65,7 @@ type Registry struct {
 
 func loadRegistry() (Registry, error) {
 	var r Registry
-	data, err := os.ReadFile(reposFile)
+	data, err := os.ReadFile(reposPath())
 	if os.IsNotExist(err) {
 		return r, nil
 	}
@@ -72,5 +83,5 @@ func saveRegistry(r Registry) error {
 	if err := os.MkdirAll(etcDir, 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(reposFile, data, 0o640)
+	return os.WriteFile(reposPath(), data, 0o640)
 }

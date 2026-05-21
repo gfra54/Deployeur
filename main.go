@@ -22,7 +22,9 @@ func main() {
 			dir = args[0]
 		}
 		err = deploy(dir)
-	case "init", "webhook", "setup", "status", "logs":
+	case "init":
+		err = initRepo(hasFlag(args, "-y", "--yes"))
+	case "webhook", "setup", "status", "logs":
 		err = fmt.Errorf("%q: pas encore implémenté", os.Args[1])
 	case "version", "-v", "--version":
 		fmt.Println("deployeur " + version)
@@ -40,6 +42,17 @@ func main() {
 	}
 }
 
+func hasFlag(args []string, names ...string) bool {
+	for _, a := range args {
+		for _, n := range names {
+			if a == n {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func usage() {
 	fmt.Print(`deployeur — déploiement auto-hébergé
 
@@ -47,7 +60,7 @@ usage: deployeur <commande> [args]
 
 commandes:
   deploy [dir]   déploie le repo (dossier courant par défaut)
-  init           scanne le repo, génère .deployeur.yml, enregistre le webhook
+  init [-y]      scanne le repo, génère .deployeur.yml, enregistre le webhook
   webhook        daemon webhook / sous-commandes
   setup          prépare le serveur (user, dossiers, service systemd)
   status         état de tous les repos enregistrés
