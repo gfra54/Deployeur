@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
+	"strings"
 )
 
 const unitTemplate = `[Unit]
@@ -29,8 +31,20 @@ const sudoersTemplate = `# Généré par deployeur setup — complète selon tes
 # %[1]s ALL=(root) NOPASSWD: /usr/bin/systemctl reload php8.2-fpm
 `
 
+const certHookTemplate = `#!/bin/sh
+# Généré par deployeur setup : copie le cert TLS vers un emplacement lisible
+# par l'user du daemon, à chaque renouvellement.
+[ "$RENEWED_LINEAGE" = "/etc/letsencrypt/live/%[1]s" ] || exit 0
+install -d -m 750 -o %[2]s -g %[2]s %[3]s
+install -m 640 -o %[2]s -g %[2]s "$RENEWED_LINEAGE/fullchain.pem" %[3]s/fullchain.pem
+install -m 640 -o %[2]s -g %[2]s "$RENEWED_LINEAGE/privkey.pem"   %[3]s/privkey.pem
+systemctl try-reload-or-restart deployeur-webhook.service 2>/dev/null || true
+`
+
+const certHookPath = "/etc/letsencrypt/renewal-hooks/deploy/deployeur.sh"
+
 // setup prepares the server to run under an existing user: dirs, systemd
-// service, sudoers template, per-server config. With dryRun it only prints.
+// service, sudoers, firewall, TLS. With dryRun it only prints the actions.
 func setup(runUser string, dryRun bool) error {
 	if !dryRun && os.Geteuid() != 0 {
 		return fmt.Errorf("setup doit tourner en root (sudo deployeur setup), ou utilise --dry-run")
@@ -49,8 +63,23 @@ func setup(runUser string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	owner := runUser + ":" + runUser
 
+	// Config serveur : hostname (FQDN), port, user.
+	g, _, err := loadGlobal()
+	if err != nil {
+		return err
+	}
+	if g.Hostname == "" {
+		g.Hostname = defaultHostname()
+	}
+	if g.Port == 0 {
+		if g.Port, err = pickPort(); err != nil {
+			return err
+		}
+	}
+	g.User = runUser
+
+	owner := runUser + ":" + runUser
 	steps := []struct {
 		desc string
 		fn   func() error
@@ -78,6 +107,15 @@ func setup(runUser string, dryRun bool) error {
 			}
 			return sh("visudo", "-cf", "/etc/sudoers.d/deployeur")
 		}},
+		{fmt.Sprintf("ouvrir le port %d dans le pare-feu", g.Port), func() error {
+			return openFirewall(g.Port)
+		}},
+		{fmt.Sprintf("TLS pour %s (cert + hook lisible par %s)", g.Hostname, runUser), func() error {
+			return setupTLS(&g)
+		}},
+		{"écrire la config serveur " + globalPath(), func() error {
+			return saveGlobal(g)
+		}},
 		{"activer et démarrer le service", func() error {
 			if err := sh("systemctl", "daemon-reload"); err != nil {
 				return err
@@ -97,57 +135,97 @@ func setup(runUser string, dryRun bool) error {
 		}
 	}
 
-	g, _, err := loadGlobal()
-	if err != nil && !dryRun {
-		return err
-	}
-	if g.Hostname == "" {
-		g.Hostname = defaultHostname()
-	}
-	if g.Port == 0 {
-		if g.Port, err = pickPort(); err != nil {
-			return err
-		}
-	}
-	g.User = runUser
-	if !dryRun {
-		if err := saveGlobal(g); err != nil {
-			return err
-		}
-	}
 	printPostSetup(g, u.HomeDir)
 	return nil
 }
 
-func printPostSetup(g Global, home string) {
-	url := fmt.Sprintf("https://%s:%d/hooks/<repo>", g.Hostname, g.Port)
-	fmt.Printf(`
-Serveur prêt — daemon sous l'user %q. À finaliser de ton côté :
-
-1. Pare-feu : ouvrir le port %d en entrée
-     ufw allow %d/tcp
-
-2. TLS pour %s :
-   - soit un cert existant → renseigne tls_cert/tls_key dans %s
-   - soit Let's Encrypt → %s
-     (le daemon détecte ensuite /etc/letsencrypt/live/%s/ automatiquement)
-
-3. Accès : l'user %q doit pouvoir faire `+"`git fetch`"+` dans chaque repo
-   (deploy key ssh dans %s/.ssh, ou token https dans le remote), avoir les
-   droits d'écriture sur les dossiers déployés, et — si tu utilises PM2 — être
-   le propriétaire des process PM2 (pm2 est par utilisateur).
-
-L'user possède %s, donc `+"`deployeur init`"+` tourne sans sudo dans chaque app.
-Webhook annoncé : %s
-`, g.User, g.Port, g.Port, g.Hostname, globalPath(), certbotHint(g.Hostname), g.Hostname, g.User, home, etcDir, url)
+// openFirewall opens the port if a host firewall is active. An inactive ufw is
+// left untouched (enabling it could cut SSH).
+func openFirewall(port int) error {
+	rule := fmt.Sprintf("%d/tcp", port)
+	if _, err := exec.LookPath("ufw"); err == nil {
+		out, _ := exec.Command("ufw", "status").CombinedOutput()
+		switch {
+		case !strings.Contains(string(out), "Status: active"):
+			fmt.Println("  ufw inactif → port déjà joignable localement (vérifie un éventuel pare-feu OVH)")
+		case strings.Contains(string(out), rule):
+			fmt.Println("  port déjà autorisé (ufw)")
+		default:
+			return sh("ufw", "allow", rule)
+		}
+		return nil
+	}
+	if _, err := exec.LookPath("firewall-cmd"); err == nil {
+		if err := sh("firewall-cmd", "--permanent", "--add-port="+rule); err != nil {
+			return err
+		}
+		return sh("firewall-cmd", "--reload")
+	}
+	fmt.Println("  aucun pare-feu local (ufw/firewalld) → port joignable localement")
+	return nil
 }
 
-// certbotHint returns the right next step depending on certbot's presence.
-func certbotHint(hostname string) string {
-	if _, err := exec.LookPath("certbot"); err != nil {
-		return "installe certbot (apt install certbot) puis: certbot certonly --standalone -d " + hostname
+// setupTLS installs the certbot deploy hook and, if a cert already exists for
+// the hostname, copies it to a user-readable location and points the config at
+// it. If no cert exists, it prints how to obtain one.
+func setupTLS(g *Global) error {
+	dst := filepath.Join(etcDir, "tls")
+	live := "/etc/letsencrypt/live/" + g.Hostname
+
+	hook := fmt.Sprintf(certHookTemplate, g.Hostname, g.User, dst)
+	if err := os.MkdirAll(filepath.Dir(certHookPath), 0o755); err != nil {
+		return err
 	}
-	return "certbot certonly --standalone -d " + hostname + "  (port 80 libre requis le temps de la validation)"
+	if err := os.WriteFile(certHookPath, []byte(hook), 0o755); err != nil {
+		return err
+	}
+
+	if !exists(live + "/fullchain.pem") {
+		fmt.Printf("  pas de cert pour %s — obtiens-en un puis relance setup:\n", g.Hostname)
+		fmt.Printf("      %s\n", certbotHint(g.Hostname))
+		fmt.Println("  (le daemon démarrera en HTTP en attendant)")
+		return nil
+	}
+	if err := os.MkdirAll(dst, 0o750); err != nil {
+		return err
+	}
+	for _, f := range []string{"fullchain.pem", "privkey.pem"} {
+		if err := sh("install", "-m", "640", "-o", g.User, "-g", g.User, filepath.Join(live, f), filepath.Join(dst, f)); err != nil {
+			return err
+		}
+	}
+	g.TLSCert = filepath.Join(dst, "fullchain.pem")
+	g.TLSKey = filepath.Join(dst, "privkey.pem")
+	fmt.Printf("  cert copié dans %s, renouvellement géré par %s\n", dst, certHookPath)
+	return nil
+}
+
+func printPostSetup(g Global, home string) {
+	scheme := "https"
+	if g.TLSCert == "" {
+		scheme = "http"
+	}
+	url := fmt.Sprintf("%s://%s:%d/hooks/<repo>", scheme, g.Hostname, g.Port)
+	fmt.Printf(`
+Serveur prêt — daemon sous l'user %q. Reste à vérifier de ton côté :
+
+- Accès : %q doit pouvoir `+"`git fetch`"+` dans chaque repo (clé ssh dans
+  %s/.ssh ou token https) + droits d'écriture sur les dossiers déployés, et —
+  si PM2 — être propriétaire des process PM2 (pm2 est par utilisateur).
+- Pare-feu externe (OVH) éventuel : autoriser le port %d.
+
+%s possède %s → `+"`deployeur init`"+` tourne sans sudo dans chaque app.
+Webhook : %s
+`, g.User, g.User, home, g.Port, g.User, etcDir, url)
+}
+
+// certbotHint returns the recommended issuance command for the hostname.
+func certbotHint(hostname string) string {
+	base := "certbot certonly --apache -d " + hostname
+	if _, err := exec.LookPath("certbot"); err != nil {
+		return "installe certbot puis: " + base
+	}
+	return base
 }
 
 func sh(name string, args ...string) error {

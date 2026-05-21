@@ -3,6 +3,18 @@
 Outil CLI de déploiement auto-hébergé pour serveurs LAMP / Node+PM2.
 Un seul binaire, aucune dépendance runtime sur les serveurs.
 
+## Install (serveur)
+
+```bash
+wget -qO /usr/local/bin/deployeur https://.../deployeur \
+  && chmod +x /usr/local/bin/deployeur \
+  && sudo deployeur setup --user $USER
+```
+
+`setup` crée les dossiers (possédés par l'user choisi), le service systemd, le
+sudoers, ouvre le port et câble le TLS, puis démarre le daemon. Ensuite, dans
+chaque app : `deployeur init` (sans sudo).
+
 ## Build
 
 ```bash

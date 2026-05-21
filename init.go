@@ -25,6 +25,14 @@ func initRepo(yes bool) error {
 		return fmt.Errorf("aucun remote 'origin' configuré — deployeur suppose que `git fetch` fonctionne déjà")
 	}
 
+	g, ok, err := loadGlobal()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("serveur non préparé — lance d'abord `sudo deployeur setup`")
+	}
+
 	name := filepath.Base(dir)
 	cfg := detect(dir)
 	cfg.Branch = gitDefaultBranch(dir)
@@ -48,10 +56,6 @@ func initRepo(yes bool) error {
 		return err
 	}
 
-	g, err := ensureGlobal(yes)
-	if err != nil {
-		return err
-	}
 	secret, err := register(name, dir, cfg.Branch)
 	if err != nil {
 		return err
@@ -70,33 +74,8 @@ func initRepo(yes bool) error {
   - Secret       : le secret ci-dessus
   - Événements   : push uniquement
 
-Pense à ouvrir le port %d dans le pare-feu, puis démarre le daemon (deployeur setup).
-`, name, configFile, url, secret, g.Port)
+`, name, configFile, url, secret)
 	return nil
-}
-
-// ensureGlobal loads the per-server config, creating it on first use (random
-// free port, FQDN). With yes=true it skips the hostname prompt.
-func ensureGlobal(yes bool) (Global, error) {
-	g, ok, err := loadGlobal()
-	if err != nil {
-		return g, err
-	}
-	if ok {
-		return g, nil
-	}
-	g.Hostname = defaultHostname()
-	if !yes {
-		g.Hostname = ask("Hostname public joignable depuis GitHub/GitLab", g.Hostname)
-	}
-	if g.Port, err = pickPort(); err != nil {
-		return g, err
-	}
-	if err := saveGlobal(g); err != nil {
-		return g, fmt.Errorf("écriture %s (droits insuffisants ? lance avec sudo ou en tant qu'user deployeur): %w", globalPath(), err)
-	}
-	fmt.Printf("Config serveur créée: %s (hostname=%s port=%d)\n", globalPath(), g.Hostname, g.Port)
-	return g, nil
 }
 
 // register adds or updates the repo in the registry, returning its HMAC secret
