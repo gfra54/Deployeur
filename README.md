@@ -6,7 +6,7 @@ Un seul binaire, aucune dépendance runtime sur les serveurs.
 ## Install (serveur)
 
 ```bash
-wget -qO /usr/local/bin/deployeur https://.../deployeur \
+wget -qO /usr/local/bin/deployeur https://github.com/gfra54/Deployeur/releases/latest/download/deployeur \
   && chmod +x /usr/local/bin/deployeur \
   && sudo deployeur setup
 ```
