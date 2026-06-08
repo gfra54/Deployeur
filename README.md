@@ -68,11 +68,15 @@ Variables disponibles dans les commandes : `$REPO`, `$COMMIT`, `$BRANCH`, `$DEPL
 
 ## Notifications
 
-Configurées par serveur dans `/etc/deployeur/config.yml` (section `notify`).
+`setup` demande interactivement s'il faut activer Mattermost (et son URL de
+webhook) et les alertes email (et les détails SMTP). Réponses stockées par
+serveur dans `/etc/deployeur/config.yml` (section `notify`) ; relancer `setup`
+réutilise les valeurs existantes comme défauts.
+
 Mattermost est prévenu à **chaque** déploiement ; en cas d'**échec**, un email
 part en plus, et le message Mattermost mentionne `@all`. Les deux canaux sont
-facultatifs (laisser vide = désactivé) ; une notif ratée n'échoue jamais le
-déploiement (l'erreur est seulement loguée).
+facultatifs ; une notif ratée n'échoue jamais le déploiement (l'erreur est
+seulement loguée). La config résultante :
 
 ```yaml
 notify:

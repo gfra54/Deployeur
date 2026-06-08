@@ -79,6 +79,10 @@ func setup(runUser string, dryRun bool) error {
 	}
 	g.User = runUser
 
+	if !dryRun {
+		configureNotify(&g)
+	}
+
 	owner := runUser + ":" + runUser
 	steps := []struct {
 		desc string

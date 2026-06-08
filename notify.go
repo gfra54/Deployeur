@@ -71,6 +71,61 @@ Détail : deployeur logs %s
 	}
 }
 
+// configureNotify demande interactivement la config Mattermost + email et la
+// stocke dans g. Les valeurs existantes servent de défaut, de sorte qu'un
+// nouveau passage de setup les conserve (entrée vide = on garde).
+func configureNotify(g *Global) {
+	n := &g.Notify
+	fmt.Println("\nNotifications de déploiement :")
+
+	if askYesNo("  Activer Mattermost (notif à chaque déploiement) ?", n.MattermostURL != "") {
+		n.MattermostURL = ask("    URL du webhook Mattermost", n.MattermostURL)
+	} else {
+		n.MattermostURL = ""
+	}
+
+	if askYesNo("  Activer les alertes email (en cas d'échec) ?", n.SMTP.Host != "") {
+		s := &n.SMTP
+		s.Host = ask("    Serveur SMTP (host)", s.Host)
+		s.Port = askInt("    Port SMTP", orInt(s.Port, 587))
+		s.User = ask("    Utilisateur SMTP (vide = sans auth)", s.User)
+		if s.User != "" {
+			s.Pass = ask("    Mot de passe SMTP", s.Pass)
+		} else {
+			s.Pass = ""
+		}
+		s.From = ask("    Expéditeur (From)", orStr(s.From, "deployeur@"+g.Hostname))
+		s.To = splitList(ask("    Destinataire(s), séparés par des virgules", strings.Join(s.To, ", ")))
+	} else {
+		n.SMTP = SMTP{}
+	}
+}
+
+func orInt(v, def int) int {
+	if v == 0 {
+		return def
+	}
+	return v
+}
+
+func orStr(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
+}
+
+// splitList parse une liste séparée par des virgules en ignorant les blancs.
+func splitList(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // postMattermost poste un message sur une URL d'incoming webhook. Une URL vide
 // est un no-op (le canal n'est simplement pas configuré).
 func postMattermost(url, text string) error {
