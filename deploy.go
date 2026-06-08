@@ -30,16 +30,16 @@ func deploy(dir string) error {
 		return fmt.Errorf("%s n'est pas un dépôt git", dir)
 	}
 
-	cfg, _, err := loadConfig(dir)
+	repo := filepath.Base(dir)
+	cfg, err := repoConfig(repo, dir)
 	if err != nil {
-		return fmt.Errorf("%s: %w", configFile, err)
+		return fmt.Errorf("config %s: %w", repo, err)
 	}
 	branch := cfg.Branch
 	if branch == "" {
 		branch = gitDefaultBranch(dir)
 	}
 
-	repo := filepath.Base(dir)
 	lock, err := lockRepo(repo)
 	if err != nil {
 		return err
@@ -185,10 +185,10 @@ func gitOut(dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// targetBranch is the branch deployeur acts on for a repo: the .deployeur.yml
+// targetBranch is the branch deployeur acts on for a repo: the configured
 // branch, falling back to the checked-out branch.
-func targetBranch(dir string) string {
-	if cfg, _, err := loadConfig(dir); err == nil && cfg.Branch != "" {
+func targetBranch(name, dir string) string {
+	if cfg, err := repoConfig(name, dir); err == nil && cfg.Branch != "" {
 		return cfg.Branch
 	}
 	return gitDefaultBranch(dir)

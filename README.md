@@ -43,7 +43,17 @@ Le daemon écoute en TLS directement sur un port dédié (aléatoire, persisté 
 cert Let's Encrypt du hostname détecté automatiquement. `/status` et `/healthz`
 restent sur `127.0.0.1:9000` (local only).
 
-## .deployeur.yml
+## Config de déploiement (store central)
+
+Les configs de tous les sites vivent **au même endroit**, côté serveur :
+`/etc/deployeur/repos.d/<repo>.yml` (un fichier par site) — plus de
+`.deployeur.yml` dans chaque dépôt. Le dossier appartient au user du daemon,
+donc `deployeur init` y écrit sans sudo.
+
+`deployeur init`, lancé dans un dépôt, affiche et permet d'éditer la config de
+ce projet (`[e]diter` ouvre `$EDITOR`/nano), puis l'enregistre au central. S'il
+trouve un ancien `.deployeur.yml` dans le dépôt, il le reprend automatiquement,
+le centralise et supprime l'ancien fichier.
 
 ```yaml
 branch: master
@@ -64,7 +74,7 @@ Mise à jour du code implicite avant `before`, **non destructive** :
 `git fetch` puis `git merge --ff-only`. Si l'arbre de travail a des modifs locales
 ou si l'historique a divergé, le déploiement s'interrompt sans rien écraser (exit 1,
 erreur loguée + enregistrée dans le state).
-Si le fichier est absent, les étapes sont auto-détectées (composer, npm build, artisan, pm2, wp).
+Si aucune config n'existe pour le repo, les étapes sont auto-détectées (composer, npm `ci`/`build`/`test`, artisan, pm2, wp).
 
 Variables disponibles dans les commandes : `$REPO`, `$COMMIT`, `$BRANCH`, `$DEPLOY_DIR`.
 

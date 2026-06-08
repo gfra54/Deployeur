@@ -10,8 +10,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// initRepo scans the current directory, writes .deployeur.yml, registers the
-// repo, and prints the webhook URL + HMAC secret to paste into the Git host.
+// initRepo lets you view/edit a repo's deploy config from its directory, stores
+// it centrally (repos.d/<name>.yml), registers the repo, and prints the webhook
+// URL + HMAC secret to paste into the Git host.
 func initRepo(yes bool) error {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -34,11 +35,35 @@ func initRepo(yes bool) error {
 	}
 
 	name := filepath.Base(dir)
-	cfg := detect(dir)
-	cfg.Branch = gitDefaultBranch(dir)
 
+	// Source de la config : store central existant > ancien .deployeur.yml
+	// (migré) > auto-détection.
+	cfg, haveCfg, err := loadConfig(name)
+	if err != nil {
+		return err
+	}
+	migrated := false
+	if !haveCfg {
+		if legacy, ok, lerr := loadLegacyConfig(dir); lerr == nil && ok {
+			cfg, migrated = legacy, true
+		} else {
+			cfg = detect(dir)
+		}
+	}
+	if cfg.Branch == "" {
+		cfg.Branch = gitDefaultBranch(dir)
+	}
+
+	source := "proposée (auto-détectée)"
+	switch {
+	case haveCfg:
+		source = "actuelle"
+	case migrated:
+		source = "reprise de l'ancien " + configFile
+	}
 	preview, _ := yaml.Marshal(cfg)
-	fmt.Printf("Repo:    %s\nRemote:  %s\nBranche: %s\n\n.deployeur.yml proposé:\n\n%s\n", name, remote, cfg.Branch, preview)
+	fmt.Printf("Repo:    %s\nRemote:  %s\nBranche: %s\n\nConfig %s → %s :\n\n%s\n",
+		name, remote, cfg.Branch, source, repoConfigPath(name), preview)
 
 	if !yes {
 		switch strings.ToLower(ask("Écrire ? [Y]es / [e]diter / [n]on", "Y")) {
@@ -51,9 +76,13 @@ func initRepo(yes bool) error {
 		}
 	}
 
-	out, _ := yaml.Marshal(cfg)
-	if err := os.WriteFile(filepath.Join(dir, configFile), out, 0o644); err != nil {
-		return err
+	if err := saveConfig(name, cfg); err != nil {
+		return fmt.Errorf("écriture %s (droits ? lance setup d'abord): %w", repoConfigPath(name), err)
+	}
+	if migrated {
+		if err := os.Remove(filepath.Join(dir, configFile)); err == nil {
+			fmt.Printf("→ ancien %s supprimé, config désormais centralisée.\n", configFile)
+		}
 	}
 
 	secret, err := register(name, dir)
@@ -63,7 +92,7 @@ func initRepo(yes bool) error {
 
 	url := fmt.Sprintf("https://%s:%d/hooks/%s", g.Hostname, g.Port, name)
 	fmt.Printf(`
-✓ %s enregistré (%s écrit).
+✓ %s enregistré (config: %s).
 
   Webhook URL : %s
   Secret HMAC : %s
@@ -74,7 +103,7 @@ func initRepo(yes bool) error {
   - Secret       : le secret ci-dessus
   - Événements   : push uniquement
 
-`, name, configFile, url, secret)
+`, name, repoConfigPath(name), url, secret)
 	return nil
 }
 

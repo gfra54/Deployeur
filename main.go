@@ -109,7 +109,7 @@ usage: deployeur <commande> [args]
 
 commandes:
   deploy [dir]   déploie le repo (dossier courant par défaut)
-  init [-y]      scanne le repo, génère .deployeur.yml, enregistre le webhook
+  init [-y]      voir/éditer la conf de déploiement du repo (stockée au central), enregistre le webhook
   webhook        lance le daemon (TLS sur le port dédié + admin local 127.0.0.1:9000)
   setup [-n]     prépare le serveur (dossiers, systemd, sudoers) sous un user existant
                  (--user <nom>, défaut $SUDO_USER) — root requis, -n=dry-run

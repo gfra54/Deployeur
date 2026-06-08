@@ -90,7 +90,7 @@ func (d *daemon) handleHook(w http.ResponseWriter, r *http.Request) {
 	}
 	json.Unmarshal(body, &p)
 	branch := strings.TrimPrefix(p.Ref, "refs/heads/")
-	want := targetBranch(repo.Dir)
+	want := targetBranch(repo.Name, repo.Dir)
 	switch {
 	case branch == "":
 		io.WriteString(w, "ok (pas de ref, ignoré)\n") // ex. ping GitHub
