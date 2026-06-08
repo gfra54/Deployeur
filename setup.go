@@ -128,6 +128,7 @@ func setup(runUser string, dryRun bool) error {
 		}},
 	}
 
+	header("Préparation du serveur")
 	for _, s := range steps {
 		if dryRun {
 			fmt.Println("[dry-run]", s.desc)
@@ -210,17 +211,21 @@ func printPostSetup(g Global, home string) {
 		scheme = "http"
 	}
 	url := fmt.Sprintf("%s://%s:%d/hooks/<repo>", scheme, g.Hostname, g.Port)
-	fmt.Printf(`
-Serveur prêt — daemon sous l'user %q. Reste à vérifier de ton côté :
 
-- Accès : %q doit pouvoir `+"`git fetch`"+` dans chaque repo (clé ssh dans
-  %s/.ssh ou token https) + droits d'écriture sur les dossiers déployés, et —
-  si PM2 — être propriétaire des process PM2 (pm2 est par utilisateur).
-- Pare-feu externe (OVH) éventuel : autoriser le port %d.
-
-%s possède %s → `+"`deployeur init`"+` tourne sans sudo dans chaque app.
-Webhook : %s
-`, g.User, g.User, home, g.Port, g.User, etcDir, url)
+	fmt.Println()
+	box("Serveur prêt", []string{
+		fmt.Sprintf("Daemon actif sous l'user « %s »", g.User),
+		fmt.Sprintf("Webhook : %s", url),
+		"",
+		fmt.Sprintf("%s possède %s → « deployeur init » sans sudo.", g.User, etcDir),
+	})
+	box("À vérifier de ton côté", []string{
+		fmt.Sprintf("• « %s » doit pouvoir « git fetch » dans chaque repo", g.User),
+		fmt.Sprintf("  (clé ssh dans %s/.ssh ou token https) + droits", home),
+		"  d'écriture sur les dossiers déployés, et — si PM2 —",
+		"  être propriétaire des process pm2 (pm2 est par user).",
+		fmt.Sprintf("• Pare-feu externe (OVH) éventuel : ouvrir le port %d.", g.Port),
+	})
 }
 
 // obtainCert issues a Let's Encrypt cert for the hostname via certbot's Apache

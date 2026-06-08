@@ -76,7 +76,7 @@ Détail : deployeur logs %s
 // nouveau passage de setup les conserve (entrée vide = on garde).
 func configureNotify(g *Global) {
 	n := &g.Notify
-	fmt.Println("\nNotifications de déploiement :")
+	header("Notifications de déploiement")
 
 	if askYesNo("  Activer Mattermost (notif à chaque déploiement) ?", n.MattermostURL != "") {
 		n.MattermostURL = ask("    URL du webhook Mattermost", n.MattermostURL)
