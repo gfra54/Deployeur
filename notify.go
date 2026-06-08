@@ -80,25 +80,58 @@ func configureNotify(g *Global) {
 
 	if askYesNo("  Activer Mattermost (notif à chaque déploiement) ?", n.MattermostURL != "") {
 		n.MattermostURL = ask("    URL du webhook Mattermost", n.MattermostURL)
+		for n.MattermostURL != "" && askYesNo("    Envoyer un message de test maintenant ?", true) {
+			msg := fmt.Sprintf(":satellite: deployeur — test de notification depuis `%s`", g.Hostname)
+			if err := postMattermost(n.MattermostURL, msg); err != nil {
+				fmt.Printf("    échec : %v\n", err)
+				if !askYesNo("    Corriger l'URL ?", true) {
+					break
+				}
+				n.MattermostURL = ask("    URL du webhook Mattermost", n.MattermostURL)
+			} else {
+				fmt.Println("    envoyé ✓ — vérifie le canal Mattermost")
+				break
+			}
+		}
 	} else {
 		n.MattermostURL = ""
 	}
 
 	if askYesNo("  Activer les alertes email (en cas d'échec) ?", n.SMTP.Host != "") {
 		s := &n.SMTP
-		s.Host = ask("    Serveur SMTP (host)", s.Host)
-		s.Port = askInt("    Port SMTP", orInt(s.Port, 587))
-		s.User = ask("    Utilisateur SMTP (vide = sans auth)", s.User)
-		if s.User != "" {
-			s.Pass = ask("    Mot de passe SMTP", s.Pass)
-		} else {
-			s.Pass = ""
+		askSMTP(s, g.Hostname)
+		for s.Host != "" && len(s.To) > 0 && askYesNo("    Envoyer un email de test maintenant ?", true) {
+			subject := "[deployeur] email de test depuis " + g.Hostname
+			body := fmt.Sprintf("Ceci est un email de test envoyé par deployeur setup depuis %s.\nSi tu le reçois, les alertes d'échec fonctionnent.\n", g.Hostname)
+			if err := sendEmail(*s, subject, body); err != nil {
+				fmt.Printf("    échec : %v\n", err)
+				if !askYesNo("    Reprendre la config SMTP ?", true) {
+					break
+				}
+				askSMTP(s, g.Hostname)
+			} else {
+				fmt.Printf("    envoyé ✓ — vérifie la boîte %s\n", strings.Join(s.To, ", "))
+				break
+			}
 		}
-		s.From = ask("    Expéditeur (From)", orStr(s.From, "deployeur@"+g.Hostname))
-		s.To = splitList(ask("    Destinataire(s), séparés par des virgules", strings.Join(s.To, ", ")))
 	} else {
 		n.SMTP = SMTP{}
 	}
+}
+
+// askSMTP demande (ou re-demande) les paramètres SMTP, en proposant les valeurs
+// déjà saisies comme défauts.
+func askSMTP(s *SMTP, hostname string) {
+	s.Host = ask("    Serveur SMTP (host)", s.Host)
+	s.Port = askInt("    Port SMTP", orInt(s.Port, 587))
+	s.User = ask("    Utilisateur SMTP (vide = sans auth)", s.User)
+	if s.User != "" {
+		s.Pass = ask("    Mot de passe SMTP", s.Pass)
+	} else {
+		s.Pass = ""
+	}
+	s.From = ask("    Expéditeur (From)", orStr(s.From, "deployeur@"+hostname))
+	s.To = splitList(ask("    Destinataire(s), séparés par des virgules", strings.Join(s.To, ", ")))
 }
 
 func orInt(v, def int) int {
