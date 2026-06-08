@@ -113,8 +113,7 @@ func editConfig(c Config) (Config, error) {
 	f.Write(out)
 	f.Close()
 
-	ed := envOr("EDITOR", "vi")
-	cmd := exec.Command(ed, f.Name())
+	cmd := exec.Command(editorCmd(), f.Name())
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return c, err
@@ -125,4 +124,16 @@ func editConfig(c Config) (Config, error) {
 	}
 	var nc Config
 	return nc, yaml.Unmarshal(data, &nc)
+}
+
+// editorCmd picks the editor for config files: $EDITOR if set, otherwise nano
+// when available, falling back to vi.
+func editorCmd() string {
+	if e := os.Getenv("EDITOR"); e != "" {
+		return e
+	}
+	if p, err := exec.LookPath("nano"); err == nil {
+		return p
+	}
+	return "vi"
 }
