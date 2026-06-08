@@ -7,7 +7,11 @@ import (
 	"strings"
 )
 
-var version = "dev"
+var (
+	version   = "dev"
+	commit    = "unknown"
+	buildDate = "unknown"
+)
 
 func main() {
 	if len(os.Args) < 2 {
@@ -35,7 +39,7 @@ func main() {
 	case "setup":
 		err = setup(flagVal(args, "--user"), hasFlag(args, "--dry-run", "-n"))
 	case "version", "-v", "--version":
-		fmt.Println("deployeur " + version)
+		fmt.Printf("deployeur %s (%s, build %s)\n", version, commit, buildDate)
 	case "help", "-h", "--help":
 		usage()
 	default:
