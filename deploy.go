@@ -78,6 +78,9 @@ func deploy(dir string) error {
 		d.logf("==> OK en %s (commit %s)", dur, short(d.commit))
 	}
 	saveState(st)
+	if g, ok, gerr := loadGlobal(); gerr == nil && ok {
+		notifyDeploy(g, st, d.logf)
+	}
 	return err
 }
 

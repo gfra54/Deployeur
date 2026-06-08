@@ -31,6 +31,7 @@ GOOS=linux GOARCH=amd64 go build -o deployeur .
 - [x] `webhook` — daemon HMAC + coalescing, TLS direct sur port dédié (pas de reverse proxy)
 - [x] `setup` — dossiers, service systemd, sudoers sous un user **existant** (--user / $SUDO_USER), port + TLS (cert existant ou certbot)
 - [x] `status`, `logs`
+- [x] notifications — Mattermost à chaque déploiement, email + `@all` Mattermost en cas d'échec
 
 ## Architecture webhook
 
@@ -64,3 +65,24 @@ erreur loguée + enregistrée dans le state).
 Si le fichier est absent, les étapes sont auto-détectées (composer, npm build, artisan, pm2, wp).
 
 Variables disponibles dans les commandes : `$REPO`, `$COMMIT`, `$BRANCH`, `$DEPLOY_DIR`.
+
+## Notifications
+
+Configurées par serveur dans `/etc/deployeur/config.yml` (section `notify`).
+Mattermost est prévenu à **chaque** déploiement ; en cas d'**échec**, un email
+part en plus, et le message Mattermost mentionne `@all`. Les deux canaux sont
+facultatifs (laisser vide = désactivé) ; une notif ratée n'échoue jamais le
+déploiement (l'erreur est seulement loguée).
+
+```yaml
+notify:
+  mattermost_url: https://mattermost.example.com/hooks/xxxxxxxxxxxx
+  smtp:
+    host: smtp.example.com
+    port: 587            # STARTTLS si le serveur le propose ; défaut 587
+    user: deployeur      # facultatif (vide = relais sans auth)
+    pass: ******
+    from: deployeur@example.com   # défaut deployeur@<host>
+    to:
+      - ops@example.com
+```
