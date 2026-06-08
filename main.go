@@ -34,7 +34,7 @@ func main() {
 		err = runWebhook()
 	case "status":
 		err = status()
-	case "logs":
+	case "logs", "log":
 		err = logs(firstArg(args), lastN(args))
 	case "setup":
 		err = setup(flagVal(args, "--user"), hasFlag(args, "--dry-run", "-n"))
@@ -75,11 +75,20 @@ func flagVal(args []string, name string) string {
 	return ""
 }
 
-// firstArg returns the first positional (non-flag) argument.
+// firstArg returns the first positional (non-flag) argument, skipping `--last`
+// and the optional number that follows it.
 func firstArg(args []string) string {
-	for _, a := range args {
-		if !strings.HasPrefix(a, "-") {
-			return a
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--last" {
+			if i+1 < len(args) {
+				if _, err := strconv.Atoi(args[i+1]); err == nil {
+					i++
+				}
+			}
+			continue
+		}
+		if !strings.HasPrefix(args[i], "-") {
+			return args[i]
 		}
 	}
 	return ""
@@ -114,7 +123,8 @@ commandes:
   setup [-n]     prépare le serveur (dossiers, systemd, sudoers) sous un user existant
                  (--user <nom>, défaut $SUDO_USER) — root requis, -n=dry-run
   status         tableau d'état de tous les repos enregistrés
-  logs <repo>    suit le log d'un repo (tail -f), --last [N] pour les N dernières lignes
+  log [repo]     suit les logs en temps réel — tous les repos, ou un seul si précisé
+                 (alias: logs ; --last [N] pour les N dernières lignes au lieu du suivi)
   version        affiche la version
 `)
 }
