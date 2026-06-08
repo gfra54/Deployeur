@@ -1,3 +1,5 @@
+<img width="181" height="188" alt="Logo" src="https://github.com/user-attachments/assets/dd58513c-994f-4dff-8201-570db7677f61" />
+
 # deployeur
 
 Outil CLI de déploiement auto-hébergé pour serveurs LAMP / Node+PM2.
